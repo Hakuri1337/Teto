@@ -1,0 +1,63 @@
+buildscript {
+    repositories {
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }//这个仓库也是forge在维护
+        mavenCentral()//maven中心仓，别问gradle为什么能用maven仓库
+    }
+}
+//注：没写注释的地方都是原版forge mdk生成的，我也不知道啥意思，也没必要理会
+plugins {
+    id 'net.minecraftforge.gradle' version '6.0.35'//forgegradle forge环境必备
+}
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+}
+minecraft {
+    mappings channel: 'official', version: '1.20.1'
+    //idea内启动游戏必须有这个，在idea内启动有个好处就是可以热重载（似乎ASM也是可以的，如果我们用这种写法的话，而且很简单，但是会重复创建钩子有点不好解决）
+    //如果你是A卡，报atio6xx.dll时，更新最新驱动，然后在安装显卡驱动时选择Driver Only（就是不要显卡控制面板）
+    runs {//注：为了能在idea内调试，请不要删除resource目录下的一些文件
+        client {}
+    }
+}
+dependencies {//Forge环境自带ASM，发布时请勿implementation ASM
+    //ResourceLocation在47.4.0有改动
+    minecraft 'net.minecraftforge:forge:1.20.1-47.3.0'
+}
+reobf {
+    //反编译vanilla的mc时看到的名称都会是aaa aab aac这样的名字，这个叫notch name，而f_114514_ m_114514_这样的叫srg name（srg是forge的一个开发者），而那种可读的，mc.player.posX这种叫mcp（Mod Coder Pack）name
+}
+tasks.named('jar', Jar).configure {
+    finalizedBy 'reobfJar'//应该是forgegradle的重映射任务
+}
+tasks.register('extractRuntimeClasspath', Copy) {//这个是用来导出混淆时所需的全部libs用的，运行过后在build里找
+    from configurations.runtimeClasspath
+    into "$buildDir/runtimeClasspath"
+    //注：编译环境和游戏运行环境不一样，编译环境的mc.jar是mcp name的，由叫remap什么的gradle任务翻译回srg name，显然我找不到解决方案，所以你应该去mc运行环境提取jar
+    //注：请确保mc运行环境干净，一旦ZKM匹配到一个类名，他就只会在这个类里寻找成员，不会管classpath里是否有同名类也不会去其它同名类中搜索
+    //注：mc的运行时jar由两个jar组成，分别是
+    //C:\Users\a\Desktop\.minecraft\libraries\net\minecraft\client\1.20.1-20230612.114412\client-1.20.1-20230612.114412-srg.jar
+    //与
+    //C:\Users\a\Desktop\.minecraft\libraries\net\minecraftforge\forge\1.20.1-47.3.0\forge-1.20.1-47.3.0-client.jar
+    //请手动合并它们回一个jar，至于顺序我忘了，最多试2次
+    //直接解压替换打回zip改后缀jar即可
+    //这两个jar似乎各自会以与两个带有其他-后缀的jar成对出现，请只保留大小最大的那个
+}
+//一般情况下，javac会以操作系统使用的字符编码或当前执行命令的控制台程序使用的字符编码去解析一个大多数情况下字符编码都为utf8的.java文件，就是不会用utf8解析，而中文windows系统默认字符编码总是gbk，所以javac时我们需要手动加入命令行-encoding utf8才行，不出意外的话gradle在使用javac时，也得有一个地方写上这行才行，就是这里
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+//豆包
+//查找哪些类编译出了invokedynamic指令
+tasks.register('checkBytecode') {
+    doLast {
+        def classFiles = fileTree(dir: 'build/classes/java/main')
+        classFiles.each { file ->
+            if (file.name.endsWith('.class')) {
+                def output = "javap -v ${file.absolutePath}".execute().text
+                if (output.contains('invokedynamic')) {
+                    println("Bytecode contains invokedynamic: ${file.name}")
+                }
+            }
+        }
+    }
+}
