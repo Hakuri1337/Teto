@@ -1,4 +1,4 @@
-import client.ForgeEntry;
+import tech.hakuri.teto.ForgeEntry;
 
 //这是专门给注入器留的入口点
 //不用特地掩盖此类和ForgeEntry，主要掩盖ClientEntry就行

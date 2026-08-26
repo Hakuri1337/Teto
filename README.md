@@ -12,7 +12,7 @@
 - 保留 `loader/src/$.java` 作为 loader：查找 Minecraft 的 `Render thread`，读取 `Jar` 指向的客户端 JAR，并把其中的 class 定义到 Minecraft 的目标 `ClassLoader`。
 - `scripts/setup-env.ps1` 和 `scripts/setup-env.bat`：自动把三个构建产物复制部署到 `%LOCALAPPDATA%\Teto`，并将环境变量设置为部署后的路径。
 - 新增 `injector/` 运行时注入器：通过 Attach API 附加到运行中的 Minecraft JVM，以 agent 形式把 `loader/$.class` 定义并实例化进游戏，实现运行时热注入。
-- `client.ClientEntry`、loader 与注入器只从两个位置读取资源：相同目录（当前工作目录）和 `%LOCALAPPDATA%\Teto`（AppData\Local\Teto）；客户端统一命名为 `client.jar`。
+- `tech.hakuri.teto.ClientEntry`、loader 与注入器只从两个位置读取资源：相同目录（当前工作目录）和 `%LOCALAPPDATA%\Teto`（AppData\Local\Teto）；客户端统一命名为 `client.jar`。
 - 明确 `hook.dll` 是 `redefiner` 的 x64 Release 构建产物；工程文件已将 x64 Release 目标名设为 `hook.dll`。
 - 移除不再使用的 `loader_windows_x64.dll` 初始化类和未被引用的 HWID 工具类。
 - 清理源码和验证副本中的硬编码账号访问令牌；当前源码不再包含账号登录、License、HWID、RSA 解密、在线过期时间或硬编码 `accessToken`。
@@ -38,7 +38,7 @@ loader/$ 查找 Render thread 的 ContextClassLoader
 执行客户端 JAR 中的顶层 $
         │
         ▼
-client.ForgeEntry -> ClientEntry.init(null)
+tech.hakuri.teto.ForgeEntry -> ClientEntry.init(null)
         │
         ├─ 注册模块、排序、启用 HUD
         ├─ System.load(HookDll)
@@ -53,8 +53,8 @@ client.ForgeEntry -> ClientEntry.init(null)
 Teto/
 ├─ client0702/                         Forge 1.20.1 客户端工程
 │  ├─ src/main/java/$\.java            客户端顶层入口
-│  ├─ src/main/java/client/ForgeEntry.java
-│  ├─ src/main/java/client/ClientEntry.java
+│  ├─ src/main/java/tech/hakuri/teto/ForgeEntry.java
+│  ├─ src/main/java/tech/hakuri/teto/ClientEntry.java
 │  ├─ build/libs/client0702.jar        构建后客户端 JAR
 │  └─ verification/                    验证、差异和回滚记录
 ├─ loader/

@@ -2,4 +2,5 @@ modLoader = "javafml"
 loaderVersion = "*"
 license = "free"
 [[mods]]
-modId = "client"
+displayName = "Teto"
+modId = "teto"

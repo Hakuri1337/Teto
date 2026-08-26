@@ -1,6 +1,6 @@
 package a;
 
-import client.hook.*;
+import tech.hakuri.teto.hook.*;
 import net.minecraft.client.Camera;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.KeyboardHandler;
