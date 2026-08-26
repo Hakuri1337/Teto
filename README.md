@@ -1,3 +1,6 @@
+人类版省流：这个客户端目前的使用方法是把$.class（loader构建产物），hook.dll（redefiner构建产物）,client.jar（客户端构建产物）以及Injector的构建产物的jar 改成上面我说的名字 放到AppData/Local/Teto
+ 随后执行 java -jar 注入器的文件名.jar --pid 游戏的pid（在任务管理器右键mc的详细信息查看）
+ 
 # Minecraft 1.20.1 Forge 客户端加载基础工程
 
 > 本仓库是一个 Minecraft 1.20.1 / Forge 47.3.0 客户端基础工程，包含客户端 JAR、Java loader 和 JVMTI redefiner。请只在自己拥有或已经明确获得许可的 Minecraft 实例、测试环境和服务器中使用。
