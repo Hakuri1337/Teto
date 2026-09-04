@@ -1,0 +1,7 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "free"
+[[mods]]
+modId = "teto"
+displayName = "Teto"
+version = "1.21.8"

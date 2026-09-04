@@ -25,7 +25,7 @@ public class $ extends Thread {
     public void run() {
         try {
             ClassLoader targetClassLoader = findMinecraftClassLoader();
-            Path jarPath = resolveClientJar();
+            Path jarPath = resolveClientJar(targetClassLoader);
             List<byte[]> readJarClasses = readJarClasses(jarPath);
             defineJarClasses(targetClassLoader, readJarClasses);
             Class.forName("$", true, targetClassLoader).getDeclaredConstructor().newInstance();
@@ -99,21 +99,54 @@ public class $ extends Thread {
         return (Unsafe) theUnsafeField.get(null);
     }
 
-    private static Path resolveClientJar() {
-        return resolveResource("client.jar", "Jar");
+    /**
+     * 在游戏进程内探测 Minecraft 版本，挑选对应的客户端 JAR。
+     * <p>
+     * 用标记类而不是读版本字符串：1.20.1 Forge 运行时是 srg 名
+     * （{@code SharedConstants.getCurrentVersion()} 会被混成 {@code m_xxxxx_}），
+     * 而 1.21.x NeoForge 运行时是 official 名，两版没有一个通用的调用方式。
+     * 类名在两版都不混淆，所以判断「某个类存不存在」是最稳的办法。
+     */
+    private static Path resolveClientJar(ClassLoader mcLoader) {
+        // DeltaTracker 是 1.21.x 引入的（Gui.renderCrosshair 的第二个参数就是它），1.20.1 没有
+        boolean modern = classExists(mcLoader, "net.minecraft.client.DeltaTracker");
+        String preferred = modern ? "client-1218.jar" : "client-1201.jar";
+        System.out.println("[loader] 版本探测：" + (modern ? "1.21.x" : "1.20.x") + "，选用 " + preferred);
+
+        Path versioned = findResource(preferred);
+        if (versioned != null) {
+            return versioned;
+        }
+        // 退回通用名，兼容只部署了单版本的老环境
+        Path generic = findResource("client.jar");
+        if (generic != null) {
+            System.out.println("[loader] 未找到 " + preferred + "，退回 client.jar");
+            return generic;
+        }
+        throw new IllegalStateException("未找到客户端 JAR。查找过 " + preferred
+                + " 与 client.jar，位置：" + getLocalDirectory() + " 与 " + getClientFolder());
     }
 
-    private static Path resolveResource(String fileName, String settingName) {
+    private static boolean classExists(ClassLoader classLoader, String name) {
+        try {
+            Class.forName(name, false, classLoader);
+            return true;
+        } catch (ClassNotFoundException | LinkageError ignored) {
+            return false;
+        }
+    }
+
+    /** 按「相同目录 -> AppData\Local\Teto」查找，找不到返回 null（不抛异常）。 */
+    private static Path findResource(String fileName) {
         List<Path> attempts = new ArrayList<>();
         addCandidate(attempts, getLocalDirectory().resolve(fileName));
         addCandidate(attempts, getClientFolder().resolve(fileName));
-
         for (Path attempt : attempts) {
             if (Files.isRegularFile(attempt)) {
                 return attempt;
             }
         }
-        throw new IllegalStateException("未找到 " + settingName + " 资源。查找顺序：" + attempts);
+        return null;
     }
 
     private static Path getClientFolder() {

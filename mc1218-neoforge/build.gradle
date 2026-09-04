@@ -1,0 +1,85 @@
+// mc1218-neoforge：Minecraft 1.21.8 / NeoForge 21.8.54 实现。
+//
+// 刻意不用 ModDevGradle/NeoGradle —— 本工程不是普通 mod，是把 class 直接 define 进
+// 运行中的游戏，所以只需要「能编译出与运行时二进制兼容的 class」。而 1.21.8 运行时
+// 用的就是 official mojang 名（1.20.1 及以下才有 srg 中间映射），所以：
+//   1. 直接 compileOnly 本地 .minecraft 里的运行时 jar 即可；
+//   2. 不需要 reobf —— 编译时看到的名字就是运行时的名字。
+// 代价是必须先用启动器装好 1.21.8-NeoForge 实例（本工程假定已装）。
+plugins {
+    id 'java'
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+}
+
+evaluationDependsOn(':core')
+evaluationDependsOn(':platform')
+
+ext {
+    mcDir = file("${System.getProperty('user.home')}/.minecraft")
+    mcVersionId = '1.21.8-NeoForge_21.8.54'
+    mcClientJar = file("${mcDir}/libraries/net/minecraft/client/1.21.8-20250717.133445/client-1.21.8-20250717.133445-srg.jar")
+    neoforgeJar = file("${mcDir}/libraries/net/neoforged/neoforge/21.8.54/neoforge-21.8.54-client.jar")
+}
+
+// 从版本 json 里读依赖清单，而不是硬编码 118 条路径 —— 换 NeoForge 版本时只改 mcVersionId
+def runtimeLibs = {
+    def json = file("${mcDir}/versions/${mcVersionId}/${mcVersionId}.json")
+    if (!json.exists()) {
+        return []
+    }
+    def parsed = new groovy.json.JsonSlurper().parse(json)
+    def libDir = file("${mcDir}/libraries")
+    def out = []
+    parsed.libraries.each { lib ->
+        def path = lib?.downloads?.artifact?.path
+        if (path) {
+            def f = new File(libDir, path)
+            if (f.exists()) out << f
+        }
+    }
+    return out
+}
+
+// 共享源码：shared/ 里是与版本无关的客户端主体（47 个模块、13 个事件、UI、工具）。
+// 不需要任何 exclude —— 版本专属文件本来就不在那个目录里。
+// 差异统一由本模块自己的 tech.hakuri.teto.compat 包吸收。
+sourceSets.main.java {
+    srcDir rootProject.file('shared/src/main/java')
+}
+
+dependencies {
+    implementation project(':core')
+    implementation project(':platform')
+    compileOnly files(mcClientJar)
+    compileOnly files(neoforgeJar)
+    compileOnly files(runtimeLibs())
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs << '-nowarn'
+}
+
+// 产物固定命名 client-1218.jar，与 1.20.1 的 client-1201.jar 并列部署，
+// 由 loader 在游戏内探测版本后自行挑选（见 loader/src/$.java）。
+tasks.named('jar', Jar).configure {
+    archiveFileName = 'client-1218.jar'
+    dependsOn ':core:classes', ':platform:classes'
+    from project(':core').sourceSets.main.output
+    from project(':platform').sourceSets.main.output
+}
+
+// 缺少 1.21.8 实例时给出可操作的提示，而不是让 javac 报一堆找不到符号
+tasks.named('compileJava').configure {
+    doFirst {
+        if (!mcClientJar.exists() || !neoforgeJar.exists()) {
+            throw new GradleException(
+                    "未找到 1.21.8 运行时 jar，请先用启动器安装 ${mcVersionId} 实例。\n" +
+                            "  期望: ${mcClientJar}\n" +
+                            "  期望: ${neoforgeJar}")
+        }
+    }
+}

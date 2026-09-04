@@ -8,6 +8,15 @@ buildscript {
 plugins {
     id 'net.minecraftforge.gradle' version '6.0.35'//forgegradle forge环境必备
 }
+//下面 jar 任务要读 core/platform 的 sourceSets，必须先让它们完成配置
+evaluationDependsOn(':core')
+evaluationDependsOn(':platform')
+
+//共享源码：shared/ 里是与版本无关的客户端主体，1.20.1 与 1.21.8 各编译一遍。
+//这边编完还要 reobf 成 srg 名，所以两版产物不通用，只有源码共用。
+sourceSets.main.java {
+    srcDir rootProject.file('shared/src/main/java')
+}
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(17)
 }
@@ -22,11 +31,24 @@ minecraft {
 dependencies {//Forge环境自带ASM，发布时请勿implementation ASM
     //ResourceLocation在47.4.0有改动
     minecraft 'net.minecraftforge:forge:1.20.1-47.3.0'
+
+    //core：不碰 Minecraft 的基础设施；platform：隔开版本相关 API 的纯接口层
+    implementation project(':core')
+    implementation project(':platform')
 }
 reobf {
     //反编译vanilla的mc时看到的名称都会是aaa aab aac这样的名字，这个叫notch name，而f_114514_ m_114514_这样的叫srg name（srg是forge的一个开发者），而那种可读的，mc.player.posX这种叫mcp（Mod Coder Pack）name
 }
 tasks.named('jar', Jar).configure {
+    //产物固定命名 client-1201.jar，与 1.21.8 的 client-1218.jar 并列部署，
+    //由 loader 在游戏内探测版本后自行挑选（见 loader/src/$.java）。
+    archiveFileName = 'client-1201.jar'
+    //core 与 platform 的 class 必须打进 jar：
+    //loader 是把 jar 里所有 .class 逐个 define 进游戏的，不在 jar 里就加载不到。
+    //这两个模块不引用 Minecraft，所以 reobf 不会动它们。
+    dependsOn ':core:classes', ':platform:classes'
+    from project(':core').sourceSets.main.output
+    from project(':platform').sourceSets.main.output
     finalizedBy 'reobfJar'//应该是forgegradle的重映射任务
 }
 tasks.register('extractRuntimeClasspath', Copy) {//这个是用来导出混淆时所需的全部libs用的，运行过后在build里找

@@ -1,4 +1,4 @@
 Manifest-Version: 1.0
 Main-Class: Injector
 Agent-Class: Agent
-
+Can-Retransform-Classes: true

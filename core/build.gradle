@@ -1,0 +1,18 @@
+// core：完全不依赖 Minecraft 的基础设施。
+// 这里的类在 1.20.1 与 1.21.8 上是同一份字节码，不需要 reobf。
+// 注意：包名保持 tech.hakuri.teto.*，与迁移前一致 —— 所以其他模块的 import 一行都不用改。
+plugins {
+    id 'java'
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+}
+
+repositories {
+    mavenCentral()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}

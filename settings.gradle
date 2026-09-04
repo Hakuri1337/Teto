@@ -1,0 +1,21 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        maven {
+            name = 'MinecraftForge'
+            url = 'https://maven.minecraftforge.net/'
+        }
+        maven { url = 'https://maven.parchmentmc.org' }
+    }
+}
+
+rootProject.name = 'Teto'
+
+// core     : 完全不碰 Minecraft 的基础设施（计时器、配色、配置、反射桥、按键表）
+// platform : 纯接口层，隔开所有版本相关的 Minecraft API
+// client0702       : 1.20.1 Forge 实现，产出 client-1201.jar
+// mc1218-neoforge  : 1.21.8 NeoForge 实现，产出 client-1218.jar
+include 'core'
+include 'platform'
+include 'client0702'
+include 'mc1218-neoforge'

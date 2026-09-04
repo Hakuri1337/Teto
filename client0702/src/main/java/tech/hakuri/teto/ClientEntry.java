@@ -1,6 +1,5 @@
 package tech.hakuri.teto;
 
-import a.a;
 import tech.hakuri.teto.feature.Module;
 import tech.hakuri.teto.feature.ModuleManager;
 import tech.hakuri.teto.feature.impl.block.FastPlace;
@@ -17,18 +16,12 @@ import tech.hakuri.teto.feature.impl.move.*;
 import tech.hakuri.teto.feature.impl.render.*;
 import tech.hakuri.teto.font.FontManager;
 import tech.hakuri.teto.font.TrueTypeFont;
+import tech.hakuri.teto.hook.Transformer;
+import tech.hakuri.teto.mc1201.Renderer1201;
+import tech.hakuri.teto.platform.Platform;
 import com.mojang.blaze3d.pipeline.RenderCall;
 import com.mojang.blaze3d.systems.RenderSystem;
-import net.minecraft.client.*;
-import net.minecraft.client.gui.Gui;
-import net.minecraft.client.multiplayer.ClientPacketListener;
-import net.minecraft.client.player.KeyboardInput;
-import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
-import net.minecraft.network.Connection;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
 
 import java.awt.*;
 import java.nio.file.Files;
@@ -115,10 +108,6 @@ public class ClientEntry {
         }
     }
 
-    private static String resolveHookDllPath() {
-        return resolveClientResource("hook.dll", "HookDll").toString();
-    }
-
     private static String firstNonBlank(String... values) {
         for (String value : values) {
             if (value != null && !value.isBlank()) {
@@ -153,6 +142,10 @@ public class ClientEntry {
             //保险起见等一秒
             Thread.sleep(1000);
 
+            //字体就位后装配绘制门面。必须在 hud.toggle() 之前 —— 那里会触发
+            //onModuleToggle，而它已经改用 Platform.renderer() 计算行高了。
+            Platform.install(Renderer1201.get());
+
             //先初始化功能，再初始化Event会比较好
             ModuleManager.modules.add(new FastPlace());
             ModuleManager.modules.add(new NoBreakDelay());
@@ -172,6 +165,7 @@ public class ClientEntry {
             ModuleManager.modules.add(new FastInvClick());
 
             ModuleManager.modules.add(new ClickManager());
+            ModuleManager.modules.add(new Settings());
             ModuleManager.modules.add(new KeyListener());
             ModuleManager.modules.add(new KillEffect());
             ModuleManager.modules.add(new TargetManager());
@@ -224,18 +218,8 @@ public class ClientEntry {
             hud.toggle();
 
             //先初始化功能，再初始化Event会比较好
-            System.load(resolveHookDllPath());
-            a.a(Gui.class);
-            a.a(Camera.class);
-            a.a(Player.class);
-            a.a(Connection.class);
-            a.a(KeyMapping.class);
-            a.a(LocalPlayer.class);
-            a.a(GameRenderer.class);
-            a.a(KeyboardInput.class);
-            a.a(KeyboardHandler.class);
-            a.a(ClientPacketListener.class);
-            a.a(EntityRenderDispatcher.class);
+            //用 java.lang.instrument 重转换 Minecraft 的类；原先这里是 System.load(hook.dll) + 11 次 a.a(...)
+            Transformer.install();
 
 
             //函数结束，不往下执行了，外面套的这个try刚好相当于把这一个函数拆成了两个函数

@@ -1,0 +1,10 @@
+isRetransformClassesSupported = true
+通道二 System.getProperties(teto.instrumentation) = true
+通道一 Agent.INSTRUMENTATION = true
+已加载的 tech.hakuri.teto.* 类数 = 196
+EventTick 已加载（证明 TickHook 的注入调用真的在执行）= true
+EventRender2D 已加载（证明 Render2DHook 生效）= true
+Platform.ready() = true
+Renderer1201 已加载 = false
+ModuleManager.modules 数量 = 50
+已启用模块数 = 14  [碰撞箱透视, 转头管理器, 无摔落伤害, 目标管理器, 按键管理器, 点击管理器, 点击无延迟, 功能列表, 被封提示, 容器速点, 自动武器, 自动工具, 疾跑, 连点]

@@ -1,0 +1,21 @@
+=== 渲染实现 ===
+Renderer1201 已加载 = false
+Renderer1218 已加载 = true
+AtlasFont 已加载 = true
+fontsUnavailable = false
+已建成的字号 = 2 [S, M]   ← 图集生效中
+
+=== 逐 hook 生效情况（事件类被加载 = 注入的调用真的执行过）===
+  ✓ EventTick          <- TickHook
+  ✓ EventRender2D      <- Render2DHook
+  ✓ EventRender3D      <- Render3DHook
+  ✓ EventCamera        <- CameraHook
+  ✓ EventInvMove       <- InvMoveHook
+  ✓ EventAfterAttack   <- AfterAttackHook（需打一次怪）
+  ✓ EventKey           <- KeyHook（需按一次键）
+  ✓ EventMoveInput     <- MoveInputHook
+  ✓ EventPacket        <- PacketReceiveHook / PacketSendHook
+  ✓ EventChamsPre      <- ChamsHook（需开 Chams）
+  ✓ EventChamsAfter    <- ChamsHook（需开 Chams）
+  ✓ EventKick          <- KickHook（需被踢一次，平时不会加载）
+  ✓ EventModuleToggle  <- 模块开关（非 hook）

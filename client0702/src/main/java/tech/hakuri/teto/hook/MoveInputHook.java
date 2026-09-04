@@ -2,7 +2,6 @@ package tech.hakuri.teto.hook;
 
 import tech.hakuri.teto.event.impl.EventMoveInput;
 import tech.hakuri.teto.utils.ReflectBridge;
-import net.minecraft.client.player.KeyboardInput;
 import org.objectweb.asm.*;
 
 //氯雷他定
@@ -40,7 +39,7 @@ public class MoveInputHook {
 
             if (opcode == Opcodes.IFEQ) {//if(true)这样子的判断基本都是IFEQ，意思是if equals
                 mv.visitVarInsn(Opcodes.ALOAD, 0);
-                mv.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(EventMoveInput.class), ReflectBridge.firstMethodName(EventMoveInput.class), Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(KeyboardInput.class)), false);
+                mv.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(EventMoveInput.class), ReflectBridge.firstMethodName(EventMoveInput.class), Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(Object.class)), false);
             }
 
             super.visitJumpInsn(opcode, label);

@@ -10,12 +10,32 @@ import java.util.List;
 /**
  * 注入器代理。由注入器通过 Attach API 的 loadAgent 载入目标 Minecraft JVM，
  * 负责定义并实例化 loader/$.class；loader 线程随后完成客户端热注入。
+ *
+ * 同时把 JVM 交给 agent 的 Instrumentation 发布出去，供客户端重转换 Minecraft 的类
+ * （取代原先的 hook.dll / JVMTI 方案）。客户端与本类分属不同 ClassLoader，
+ * 所以用两条通道冗余发布，客户端任取其一即可。
  */
 public final class Agent {
+
+    /**
+     * 通道一：本类的静态字段。客户端通过系统 ClassLoader 反射读取。
+     * loadAgent 会把注入器 JAR 追加到系统类路径并用系统 ClassLoader 加载本类，
+     * 因此 Class.forName("Agent", false, ClassLoader.getSystemClassLoader()) 必定拿到同一个类。
+     */
+    public static volatile Instrumentation INSTRUMENTATION;
+
+    /**
+     * 通道二：System.getProperties()。Properties 继承 Hashtable&lt;Object,Object&gt;，可承载任意对象；
+     * 而 System.getProperty(String) 对非字符串值返回 null，不会污染字符串属性视图。
+     * 这条通道只依赖 java.base，不受目标进程 ClassLoader 拓扑影响。
+     */
+    public static final String INSTRUMENTATION_KEY = "teto.instrumentation";
+
     private Agent() {
     }
 
     public static void agentmain(String agentArgs, Instrumentation inst) {
+        publishInstrumentation(inst);
         Path loaderClassPath = resolveLoaderClass(agentArgs);
         byte[] classBytes;
         try {
@@ -36,6 +56,17 @@ public final class Agent {
         } catch (ReflectiveOperationException | RuntimeException | LinkageError ex) {
             throw new IllegalStateException("无法加载 loader/$.class", ex);
         }
+    }
+
+    private static void publishInstrumentation(Instrumentation inst) {
+        if (inst == null) {
+            System.out.println("[agent] JVM 未提供 Instrumentation，客户端将无法挂钩 Minecraft 的类。");
+            return;
+        }
+        INSTRUMENTATION = inst;
+        System.getProperties().put(INSTRUMENTATION_KEY, inst);
+        System.out.println("[agent] Instrumentation 已发布，isRetransformClassesSupported = "
+                + inst.isRetransformClassesSupported());
     }
 
     private static Path resolveLoaderClass(String agentArgs) {

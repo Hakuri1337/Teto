@@ -1,0 +1,40 @@
+// platform：纯接口层。这里**不允许出现任何 net.minecraft / com.mojang 引用**，
+// 否则版本隔离就失效了。1.20.1 与 1.21.8 各自提供实现。
+plugins {
+    id 'java'
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(':core')
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+// 守门任务：platform 里一旦混进 Minecraft 引用就构建失败
+tasks.register('checkNoMinecraftRefs') {
+    def srcDir = file('src/main/java')
+    doLast {
+        def offenders = []
+        if (srcDir.exists()) {
+            srcDir.eachFileRecurse { f ->
+                if (f.name.endsWith('.java') && f.text =~ /net\.minecraft|com\.mojang/) {
+                    offenders << f.path
+                }
+            }
+        }
+        if (offenders) {
+            throw new GradleException("platform 模块不得引用 Minecraft：\n  " + offenders.join('\n  '))
+        }
+    }
+}
+tasks.named('check').configure { dependsOn 'checkNoMinecraftRefs' }
