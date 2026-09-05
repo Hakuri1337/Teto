@@ -63,6 +63,28 @@ public final class Renderer1201 implements IRenderer {
         RenderUtils.drawRect(gui, left, top, right, bottom, argb);
     }
 
+    /**
+     * 几何细分圆角（GuardLite RenderUtils.drawRoundedRect 同款）：
+     * 中心十字 5 个矩形 + 4 个 TRIANGLE_FAN 扇形角，顶点数随半径走，任何尺寸都不糊。
+     */
+    @Override
+    public void roundedRect(float x, float y, float w, float h, float radius, int argb) {
+        if (gui == null) return;
+        RenderUtils.drawRoundedRect(gui.pose(), x, y, w, h, radius, argb);
+    }
+
+    @Override
+    public void image(java.awt.image.BufferedImage image, float x, float y, float w, float h, int tint) {
+        if (gui == null || image == null) return;
+        net.minecraft.resources.ResourceLocation location = BufferedImageTexture.of(image);
+        com.mojang.blaze3d.systems.RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionTexShader);
+        com.mojang.blaze3d.systems.RenderSystem.setShaderTexture(0, location);
+        com.mojang.blaze3d.systems.RenderSystem.enableBlend();
+        com.mojang.blaze3d.systems.RenderSystem.defaultBlendFunc();
+        gui.blit(location, Math.round(x), Math.round(y), 0f, 0f,
+                Math.round(w), Math.round(h), image.getWidth(), image.getHeight());
+    }
+
     @Override
     public float text(FontSize size, String str, float x, float y, int argb) {
         if (gui == null) return x;
@@ -114,5 +136,27 @@ public final class Renderer1201 implements IRenderer {
     public float guiScale() {
         //不要用 mc.options.guiScale，自动档时它是 0
         return (float) Minecraft.getInstance().getWindow().getGuiScale();
+    }
+
+    @Override
+    public void beginScissor(float x, float y, float w, float h) {
+        if (gui == null) return;
+        gui.enableScissor(Math.round(x), Math.round(y), Math.round(x + w), Math.round(y + h));
+    }
+
+    @Override
+    public void endScissor() {
+        if (gui == null) return;
+        gui.disableScissor();
+    }
+
+    /**
+     * 面板背景模糊（1.20.1 only）。委托 {@link BlurRenderer1201}：把主渲染目标颜色纹理过一遍
+     * 可分离高斯，再以圆角几何贴回面板区域。必须在面板其它绘制之前调。
+     */
+    @Override
+    public void blurRect(float x, float y, float w, float h, float radius) {
+        if (gui == null) return;
+        BlurRenderer1201.get().renderBlur(gui, x, y, w, h, radius);
     }
 }

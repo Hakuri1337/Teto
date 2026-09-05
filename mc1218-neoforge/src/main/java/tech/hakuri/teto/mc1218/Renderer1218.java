@@ -1,13 +1,24 @@
 package tech.hakuri.teto.mc1218;
 
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.render.TextureSetup;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShapeRenderer;
+import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.resources.ResourceLocation;
+import org.joml.Matrix3x2f;
 import tech.hakuri.teto.platform.FontSize;
 import tech.hakuri.teto.platform.IRenderer;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * {@link IRenderer} 的 Minecraft 1.21.8 / NeoForge 实现。
@@ -130,6 +141,129 @@ public final class Renderer1218 implements IRenderer {
         gui.fill(Math.round(left), Math.round(top), Math.round(right), Math.round(bottom), opaque(argb));
     }
 
+    // ===== 几何圆角（NavenClickGUI 的唯一形状原语）=====
+    //
+    // 1.21.8 的 GUI 是提交模型：把自己实现的 GuiElementRenderState 塞进
+    // GuiGraphics.guiRenderState，GuiRenderer 帧末统一 buildVertices → 走 GUI pipeline。
+    // 圆角在这里就是 5 个矩形 + 4 个三角扇（与 1.20.1 的几何法同一份数学）。
+
+    @Override
+    public void roundedRect(float x, float y, float w, float h, float radius, int argb) {
+        if (gui == null) return;
+        if (radius < 0.0F) radius = 0.0F;
+        if (radius > w / 2.0F) radius = w / 2.0F;
+        if (radius > h / 2.0F) radius = h / 2.0F;
+        RoundedRectState state = new RoundedRectState(
+                RenderPipelines.GUI, TextureSetup.noTexture(),
+                new Matrix3x2f(gui.pose()),
+                x, y, w, h, radius, opaque(argb), scissorArea());
+        guiRenderStateOf(gui).submitGuiElement(state);
+    }
+
+    /** 取 GuiGraphics 当前的裁剪区域（可能为 null）。scissorStack 是包级私有，用反射拿一次。 */
+    private net.minecraft.client.gui.navigation.ScreenRectangle scissorArea() {
+        try {
+            if (scissorStackField == null) {
+                scissorStackField = GuiGraphics.class.getDeclaredField("scissorStack");
+                scissorStackField.setAccessible(true);
+                Class<?> cls = scissorStackField.getType();
+                scissorPeek = cls.getDeclaredMethod("peek");
+                scissorPeek.setAccessible(true);
+            }
+            Object stack = scissorStackField.get(gui);
+            return (net.minecraft.client.gui.navigation.ScreenRectangle) scissorPeek.invoke(stack);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    @Override
+    public void beginScissor(float x, float y, float w, float h) {
+        if (gui == null) return;
+        // GuiGraphics.enableScissor 是 public 的，直接调，不走反射
+        gui.enableScissor(Math.round(x), Math.round(y), Math.round(x + w), Math.round(y + h));
+    }
+
+    @Override
+    public void endScissor() {
+        if (gui == null) return;
+        gui.disableScissor();
+    }
+
+    private static java.lang.reflect.Field scissorStackField;
+    private static java.lang.reflect.Method scissorPeek;
+    private static java.lang.reflect.Field guiRenderStateField;
+
+    private static net.minecraft.client.gui.render.state.GuiRenderState guiRenderStateOf(GuiGraphics g) {
+        try {
+            if (guiRenderStateField == null) {
+                guiRenderStateField = GuiGraphics.class.getDeclaredField("guiRenderState");
+                guiRenderStateField.setAccessible(true);
+            }
+            return (net.minecraft.client.gui.render.state.GuiRenderState) guiRenderStateField.get(g);
+        } catch (Throwable t) {
+            throw new IllegalStateException("无法访问 GuiGraphics.guiRenderState", t);
+        }
+    }
+
+    /** 圆角矩形的提交状态：buildVertices 里发 5 个矩形 + 4 个三角扇。 */
+    private record RoundedRectState(RenderPipeline pipeline, TextureSetup textureSetup, Matrix3x2f pose,
+                                    float x, float y, float w, float h, float radius, int color,
+                                    net.minecraft.client.gui.navigation.ScreenRectangle scissorArea)
+            implements net.minecraft.client.gui.render.state.GuiElementRenderState {
+
+        @Override
+        public void buildVertices(VertexConsumer consumer, float z) {
+            float a = (color >> 24 & 0xFF) / 255.0F;
+            float r = (color >> 16 & 0xFF) / 255.0F;
+            float g = (color >> 8 & 0xFF) / 255.0F;
+            float b = (color & 0xFF) / 255.0F;
+            float cr = radius;
+
+            // 中心十字（5 个矩形），注意顶点顺序：GUI 管线期望逆时针（从屏幕看）
+            quad(consumer, z, x + cr, y + cr, w - cr * 2F, h - cr * 2F, r, g, b, a);
+            quad(consumer, z, x + cr, y, w - cr * 2F, cr, r, g, b, a);
+            quad(consumer, z, x + cr, y + h - cr, w - cr * 2F, cr, r, g, b, a);
+            quad(consumer, z, x, y + cr, cr, h - cr * 2F, r, g, b, a);
+            quad(consumer, z, x + w - cr, y + cr, cr, h - cr * 2F, r, g, b, a);
+
+            int vertices = (int) Math.min(Math.max(cr * 2.5F, 12.0F), 90.0F);
+            fan(consumer, z, x + cr, y + cr, cr, vertices, 180, r, g, b, a);
+            fan(consumer, z, x + w - cr, y + cr, cr, vertices, 90, r, g, b, a);
+            fan(consumer, z, x + cr, y + h - cr, cr, vertices, 270, r, g, b, a);
+            fan(consumer, z, x + w - cr, y + h - cr, cr, vertices, 0, r, g, b, a);
+        }
+
+        private void quad(VertexConsumer c, float z, float qx, float qy, float qw, float qh, float r, float g, float b, float a) {
+            // 屏幕空间逆时针（GUI 管线的正面朝向）
+            put(c, z, qx, qy, r, g, b, a);
+            put(c, z, qx + qw, qy, r, g, b, a);
+            put(c, z, qx + qw, qy + qh, r, g, b, a);
+            put(c, z, qx, qy + qh, r, g, b, a);
+        }
+
+        private void fan(VertexConsumer c, float z, float cx, float cy, float rad, int vertices, int quadrant, float r, float g, float b, float a) {
+            put(c, z, cx, cy, r, g, b, a);
+            for (int i = 0; i <= vertices; i++) {
+                double angle = (Math.PI * 2.0) * (i + quadrant) / (vertices * 4.0);
+                put(c, z, (float) (cx + Math.sin(angle) * rad), (float) (cy + Math.cos(angle) * rad), r, g, b, a);
+            }
+        }
+
+        private void put(VertexConsumer c, float z, float px, float py, float r, float g, float b, float a) {
+            org.joml.Vector2f p = pose.transformPosition(px, py, new org.joml.Vector2f());
+            c.addVertex(p.x, p.y, z).setColor(r, g, b, a);
+        }
+
+        @Override
+        public net.minecraft.client.gui.navigation.ScreenRectangle bounds() {
+            int ix = (int) Math.floor(x), iy = (int) Math.floor(y);
+            net.minecraft.client.gui.navigation.ScreenRectangle rect =
+                    new net.minecraft.client.gui.navigation.ScreenRectangle(ix, iy, (int) Math.ceil(w), (int) Math.ceil(h));
+            return scissorArea != null ? rect.intersection(scissorArea) : rect;
+        }
+    }
+
     // ===== CPU 栅格化图的贴图（Material UI 的唯一贴图原语）=====
 
     /** 已上传的 UI 纹理缓存：源图 identity + 缩放后尺寸 → 纹理位置。 */
@@ -190,17 +324,6 @@ public final class Renderer1218 implements IRenderer {
             return o instanceof ImageKey k && k.srcId == srcId && k.w == w && k.h == h;
         }
         @Override public int hashCode() { return hash; }
-    }
-
-    @Override
-    public void image(java.awt.image.BufferedImage image, float x, float y, float w, float h, int tint) {
-        if (gui == null || image == null) return;
-        net.minecraft.resources.ResourceLocation location = BufferedImageTexture.of(image);
-        //tint==0 表示不染色（阴影/辉光本身带色），否则按 tint 染（白底圆角染成表面色/primary）
-        int color = tint == 0 ? 0xFFFFFFFF : opaque(tint);
-        gui.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, location,
-                Math.round(x), Math.round(y), 0f, 0f,
-                Math.round(w), Math.round(h), image.getWidth(), image.getHeight(), color);
     }
 
     @Override

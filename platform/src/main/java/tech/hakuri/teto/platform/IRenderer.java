@@ -33,6 +33,13 @@ public interface IRenderer {
     void rect(float left, float top, float right, float bottom, int argb);
 
     /**
+     * 圆角矩形（几何细分，非纹理）。NavenClickGUI 的唯一定制形状原语。
+     * 边缘靠顶点细分平滑（半径大时自动增加段数），任何尺寸/guiScale 都不糊。
+     * radius 会被钳到 [0, min(w,h)/2]。颜色必须带 alpha。
+     */
+    void roundedRect(float x, float y, float w, float h, float radius, int argb);
+
+    /**
      * 把一张 CPU 栅格化的图按给定尺寸与染色贴出来。
      * 这是 Material UI 的唯一贴图原语：圆角、阴影、辉光都是预烘的
      * BufferedImage（九宫格源图），由实现负责上传成纹理并绘制。
@@ -68,4 +75,28 @@ public interface IRenderer {
 
     /** GUI 缩放倍率。调用方一般不需要它 —— 坐标换算由实现负责，留这个口子是为了少数需要按物理像素对齐的场景。 */
     float guiScale();
+
+    /**
+     * 开始裁剪（GUI 坐标）。之后所有 2D 绘制只在该矩形内生效，直到 {@link #endScissor()}。
+     * 1.20.1 走 GuiGraphics.enableScissor；1.21.8 包级私有的 scissorStack 由实现用反射处理。
+     * 必须成对调用；不支持嵌套（ClickGUI 一次只裁一个区域）。
+     */
+    void beginScissor(float x, float y, float w, float h);
+
+    /** 结束当前裁剪。 */
+    void endScissor();
+
+    /**
+     * 面板背景模糊（Kawase 双 pass）。把主渲染目标当前的颜色纹理下采样到一组半分辨率 FBO、
+     * 再上采样回来，然后把模糊结果以「纹理化圆角矩形」贴回 (x,y,w,h) 区域，radius 与面板圆角一致。
+     * <p>
+     * 只在 ClickGUI 面板矩形上生效，不是全屏模糊。1.20.1 实现见 {@code BlurRenderer1201}；
+     * 1.21.8 不实现此能力（默认 no-op），因此调用方无需判版本。
+     * <p>
+     * <b>必须在面板其它绘制之前调用</b>：实现会采样主渲染目标的颜色纹理作为模糊源，
+     * 调用时该纹理里应仍是面板「后面」的场景，不能已经画上面板内容。
+     */
+    default void blurRect(float x, float y, float w, float h, float radius) {
+        // 默认不模糊：1.21.8 等不实现此能力的版本走这里。
+    }
 }
